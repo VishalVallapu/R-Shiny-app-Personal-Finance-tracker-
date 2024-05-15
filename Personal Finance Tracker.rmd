@@ -1,0 +1,114 @@
+---
+title: "Personal Finance Tracker"
+author: "Priyanka Mupparaju,Sainath Patel Naini"
+date: "2024-04-13"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load necessary libraries
+install.packages("shiny")
+install.packages("ggplot2")
+install.packages("dplyr")
+install.packages("lubridate")
+library(shiny)
+library(ggplot2)
+library(dplyr)
+library(lubridate)
+
+
+# Define UI
+ui <- fluidPage(
+  titlePanel("Personal Finance Tracker"),
+  sidebarLayout(
+    sidebarPanel(
+      h3("Add New Transaction"),
+      dateInput("date", "Date", format = "yyyy-mm-dd", value = Sys.Date()),
+      selectInput("category", "Category", choices = c("Food", "Transportation", "Utilities", "Entertainment", "Other")),
+      numericInput("amount", "Amount", min = 0, value = 0, step = 0.01),
+      textInput("description", "Description", placeholder = "Enter a description"),
+      actionButton("add_transaction", "Add Transaction"),
+      textOutput("date_comment"), # Add a text output for the date comment
+      
+      h3("Monthly Expenses"),
+      selectInput("month_year", "Select Month and Year", choices = sort(unique(paste(month(Sys.Date() - months(0:11), label = TRUE), year(Sys.Date() - months(0:11)), sep = " ")), decreasing = TRUE))
+    ),
+    mainPanel(
+      h3("Transaction History"),
+      tableOutput("transaction_table"),
+      
+      h3("Visualizations"),
+      tabsetPanel(
+        tabPanel("Bar Chart", plotOutput("spending_chart")),
+        tabPanel("Pie Chart", plotOutput("pie_chart")),
+      )
+    )
+  )
+)
+
+# Define server
+server <- function(input, output, session) {
+  # Initialize data storage
+  transactions <- reactiveVal(data.frame(
+    date = as.Date(character()),
+    category = character(),
+    amount = numeric(),
+    description = character()
+  ))
+  
+  # Handle adding new transactions
+  observeEvent(input$add_transaction, {
+    new_transaction <- data.frame(
+      date = input$date,
+      category = input$category,
+      amount = input$amount,
+      description = input$description
+    )
+    
+    # Check if the date is in the future
+    if (input$date > Sys.Date()) {
+      output$date_comment <- renderText("Please enter a date in the past or today.")
+    } else {
+      output$date_comment <- renderText("") # Clear the comment
+      transactions(rbind(transactions(), new_transaction))
+    }
+  })
+  
+  # Display transaction history
+  output$transaction_table <- renderTable({
+    transactions()
+  })
+  
+  # Create spending chart
+  output$spending_chart <- renderPlot({
+    spending_data <- transactions() %>%
+      group_by(category) %>%
+      summarize(total_spending = sum(amount))
+    
+    ggplot(spending_data, aes(x = category, y = total_spending)) +
+      geom_bar(stat = "identity", fill = "steelblue") +
+      labs(x = "Category", y = "Total Spending", title = "Spending by Category")
+  })
+  
+  # Create pie chart
+  output$pie_chart <- renderPlot({
+    spending_data <- transactions() %>%
+      group_by(category) %>%
+      summarize(total_spending = sum(amount))
+    
+    ggplot(spending_data, aes(x = "", y = total_spending, fill = category)) +
+      geom_bar(stat = "identity", width = 1) +
+      coord_polar("y", start = 0) +
+      labs(title = "Spending by Category (Pie Chart)") +
+      theme_void()
+  })
+  
+  
+}
+
+# Run the app
+shinyApp(ui, server)
+
